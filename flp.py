@@ -6,6 +6,7 @@ Created on Wed Dec 06 13:47:38 2017
 """
 import sys
 import time
+import random
 from pulp import splitDict, makeDict, LpVariable, LpProblem, lpSum, LpInteger, LpMinimize, value
 
 SD_DATASET1 = "data/dummy_sd"
@@ -64,8 +65,9 @@ def sdflp_greedy(facilities, clients, demands):
     
     for i in range(len(opt_facilities)):
         print "{} - {} = {}".format(opt_facilities[i][3], clients[0], opt_assignments[i])
-    print "Total cost = ", calculate_cost(opt_facilities, opt_assignments)
+    print "Total cost - Total demand = ", calculate_cost_demand(opt_facilities, opt_assignments)
     print "Execution time = ", exec_time
+    return exec_time
 
 def sdflp_greedy_fractional(facilities, clients, capacity_fixedcost, demands, costs):
     """
@@ -95,8 +97,9 @@ def sdflp_greedy_fractional(facilities, clients, capacity_fixedcost, demands, co
     
     for i in range(len(opt_facilities)):
         print "{} - {} = {}".format(opt_facilities[i][3], clients[0], opt_assignments[i])
-    print "Total cost = ", calculate_cost(opt_facilities, opt_assignments)
+    print "Total cost - Total demand = ", calculate_cost_demand(opt_facilities, opt_assignments)
     print "Execution time = ", exec_time
+    return exec_time
 
 def flp_linprog(facilities, clients, capacity_fixedcost, demands, costs):
     start_time = time.time()
@@ -144,6 +147,7 @@ def flp_linprog(facilities, clients, capacity_fixedcost, demands, costs):
     # The optimised objective function value is printed to the screen    
     print "Total Costs = ", value(prob.objective)
     print "Execution time = ", exec_time
+    return exec_time
 
 def parser(dataset):
     datafile = open(dataset)
@@ -168,13 +172,33 @@ def parser(dataset):
 
     return facilities, clients, capacity_fixedcost, demands, costs
 
-def calculate_cost(list_facilities, list_assignments):
+def generate_random(num_facilities, num_clients):
+
+    facilities = ["F{}".format(i) for i in range(num_facilities)]
+    clients = ["L{}".format(i) for i in range(num_clients)]
+    
+    generate_capacities = random.sample(range(1, 100000), num_facilities)
+    generate_fixedcosts = random.sample(range(0, 100000), num_facilities)
+    capacity_fixedcost = dict(zip(facilities, zip(generate_capacities, generate_fixedcosts)))
+    
+    generate_demands = random.sample(range(100, 100000), num_clients)
+    demands = dict(zip(clients, generate_demands))
+    
+    costs = []
+    for i in range(num_facilities):
+        costs.append(random.sample(range(0, 10000), num_clients))
+    
+    return facilities, clients, capacity_fixedcost, demands, costs
+
+def calculate_cost_demand(list_facilities, list_assignments):
     total_cost = 0
+    total_demand = 0
 
     for i in range(len(list_facilities)):
         total_cost += list_facilities[i][0] + list_facilities[i][1]*list_assignments[i]
+        total_demand += list_assignments[i]
 
-    return total_cost
+    return total_cost, total_demand
 
 def convert_to_greedy_form(facilities, capacity_fixedcost, costs):
     greedy_facilities = []
@@ -189,23 +213,58 @@ def convert_to_greedy_form(facilities, capacity_fixedcost, costs):
     
     return greedy_facilities
 
+def test_running_time(num_iter, num_facilities, num_clients):
+    greedy_total_running_time = 0
+    greedyfractional_total_running_time = 0
+    linprog_total_running_time = 0
+
+    for i in range(num_iter):
+        print i
+        # 1.1 DATA SET SD
+        facilities, clients, capacity_fixedcost, demands, costs = generate_random(num_facilities, num_clients)
+        greedy_facilities = convert_to_greedy_form(facilities, capacity_fixedcost, costs)
+    
+        # 1.1.1 GREEDY
+        greedy_total_running_time += sdflp_greedy(greedy_facilities, clients, demands)
+    
+        # 1.1.2 GREEDY_FRACTIONAL
+        greedyfractional_total_running_time += sdflp_greedy_fractional(greedy_facilities, clients, capacity_fixedcost, demands, costs)
+    
+        # 1.1.3 LINEAR_PROGRAMMING
+        linprog_total_running_time += flp_linprog(facilities, clients, capacity_fixedcost, demands, costs)
+
+    return (float)(greedy_total_running_time/num_iter), (float)(greedyfractional_total_running_time/num_iter), (float)(linprog_total_running_time/num_iter)
+
 def main():
     # EXPERIMENTS
 
     # 1. Experiment - SINGLE DEMAND
 
-    # 1.1 DATA SET SD 1
-    facilities, clients, capacity_fixedcost, demands, costs = parser(SD_DATASET1)
+    # Random dataset
+    facilities, clients, capacity_fixedcost, demands, costs = generate_random(500, 1)
     greedy_facilities = convert_to_greedy_form(facilities, capacity_fixedcost, costs)
 
-    # 1.1.1 GREEDY
+    # GREEDY
     sdflp_greedy(greedy_facilities, clients, demands)
 
-    # 1.1.2 GREEDY_FRACTIONAL
+    # GREEDY_FRACTIONAL
     sdflp_greedy_fractional(greedy_facilities, clients, capacity_fixedcost, demands, costs)
 
-    # 1.1.3 LINEAR_PROGRAMMING
+    # LINEAR_PROGRAMMING
     flp_linprog(facilities, clients, capacity_fixedcost, demands, costs)
+
+#    # 1.1 DATA SET SD 1
+#    facilities, clients, capacity_fixedcost, demands, costs = parser(SD_DATASET1)
+#    greedy_facilities = convert_to_greedy_form(facilities, capacity_fixedcost, costs)
+#
+#    # 1.1.1 GREEDY
+#    sdflp_greedy(greedy_facilities, clients, demands)
+#
+#    # 1.1.2 GREEDY_FRACTIONAL
+#    sdflp_greedy_fractional(greedy_facilities, clients, capacity_fixedcost, demands, costs)
+#
+#    # 1.1.3 LINEAR_PROGRAMMING
+#    flp_linprog(facilities, clients, capacity_fixedcost, demands, costs)
 
 #    # 1.2 DATA SET SD 2
 #    facilities, clients, capacity_fixedcost, demands, costs = parser(SD_DATASET2)
@@ -232,6 +291,9 @@ def main():
 #
 #    # 1.3.3 LINEAR_PROGRAMMING
 #    flp_linprog(facilities, clients, capacity_fixedcost, demands, costs)
+    
+#    # 2. Running time experiment
+#    print "(greedy, greedyfractional, linearprogramming) : ", test_running_time(100, 10000, 1)
 
     print "Exiting.."
 
